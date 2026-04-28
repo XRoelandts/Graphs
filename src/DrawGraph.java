@@ -1,82 +1,109 @@
-import java.util.*;
+import javax.swing.*;
+import java.awt.*;
+import java.awt.geom.*;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import javax.imageio.ImageIO;
 
 public class DrawGraph {
-    static int n;
-    static boolean[][] adj;
-    static int[][]   weight;
-    static List<int[]> cycles = new ArrayList<>();
 
-    public static void main(String[] args) {
-        Scanner sc = new Scanner(System.in);
+    static final int WIDTH = 800;
+    static final int HEIGHT = 800;
+    static final int NODE_R = 25;
 
-        n = sc.nextInt();
-        int m = sc.nextInt();
+    public static void main(String[] args) throws Exception {
 
-        adj    = new boolean[n][n];
-        weight = new int[n][n];
+        String input = args.length > 0 ? String.join(" ", args) : "ANT CUN BOG AMA DC TOL SAN";
+        String[] vertices = input.trim().split("\\s+");
+        int n = vertices.length;
 
-        for (int i = 0; i < m; i++) {
-            int u = sc.nextInt(), v = sc.nextInt(), w = sc.nextInt();
-            adj[u][v]    = true;
-            weight[u][v] = w;
+        int[][] adj = new int[n][n];
+        for (int i = 0; i < n; i++) {
+            adj[i][(2 * i + 1) % n] = 1;
+            adj[i][(2 * i + 2) % n] = 1;
         }
 
-        Set<String> seen = new LinkedHashSet<>();
-
-        for (int a = 0; a < n; a++)
-            for (int b = 0; b < n; b++) {
-                if (b == a || !adj[a][b]) continue;
-                for (int c = 0; c < n; c++) {
-                    if (c == a || c == b || !adj[b][c]) continue;
-                    for (int d = 0; d < n; d++) {
-                        if (d == a || d == b || d == c) continue;
-                        if (!adj[c][d] || !adj[d][a])  continue;
-
-                        int[] cycle = {a, b, c, d};
-                        int[] canonical = canonicalize(cycle);
-                        String key = Arrays.toString(canonical);
-                        seen.add(key);
-                        cycles.add(new int[]{canonical[0], canonical[1],
-                                canonical[2], canonical[3]});
-                    }
-                }
-            }
-
-        Map<String, int[]> unique = new LinkedHashMap<>();
-        for (int[] c : cycles) {
-            String key = Arrays.toString(c);
-            unique.put(key, c);
+        System.out.println("Adjacency Matrix:");
+        System.out.print("       ");
+        for (String v : vertices) System.out.printf("%-6s", v);
+        System.out.println();
+        for (int i = 0; i < n; i++) {
+            System.out.printf("%-6s ", vertices[i]);
+            for (int j = 0; j < n; j++)
+                System.out.printf("%-6d", adj[i][j]);
+            System.out.println();
         }
 
-        if (unique.isEmpty()) {
-            System.out.println("No cycles of length 4 found.");
+        int cx = WIDTH / 2, cy = HEIGHT / 2;
+        int[] x = new int[n], y = new int[n];
+        for (int i = 0; i < n; i++) {
+            double angle = 2 * Math.PI * i / n - Math.PI / 2;
+            x[i] = (int) (cx + 300 * Math.cos(angle));
+            y[i] = (int) (cy + 300 * Math.sin(angle));
+        }
+
+        BufferedImage img = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, WIDTH, HEIGHT);
+
+        g.setStroke(new BasicStroke(2));
+        for (int i = 0; i < n; i++) {
+            int right = (2 * i + 1) % n;
+            int left  = (2 * i + 2) % n;
+            drawArrow(g, x[i], y[i], x[right], y[right], Color.RED,   i == right);
+            drawArrow(g, x[i], y[i], x[left],  y[left],  Color.GREEN, i == left);
+        }
+
+        for (int i = 0; i < n; i++) {
+            g.setColor(Color.CYAN);
+            g.fillOval(x[i] - NODE_R, y[i] - NODE_R, 2 * NODE_R, 2 * NODE_R);
+            g.setColor(Color.BLACK);
+            g.drawOval(x[i] - NODE_R, y[i] - NODE_R, 2 * NODE_R, 2 * NODE_R);
+            g.setFont(new Font("Arial", Font.BOLD, 11));
+            FontMetrics fm = g.getFontMetrics();
+            g.drawString(vertices[i], x[i] - fm.stringWidth(vertices[i]) / 2, y[i] + 5);
+        }
+
+        g.dispose();
+
+        ImageIO.write(img, "PNG", new File("graph.png"));
+        System.out.println("Saved graph.png");
+
+        JFrame frame = new JFrame("Graph");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.add(new JLabel(new ImageIcon(img)));
+        frame.pack();
+        frame.setVisible(true);
+    }
+
+    static void drawArrow(Graphics2D g, int x1, int y1, int x2, int y2, Color c, boolean loop) {
+        g.setColor(c);
+
+        if (loop) {
+            g.drawOval(x1 - NODE_R, y1 - 3 * NODE_R, 2 * NODE_R, 2 * NODE_R);
             return;
         }
 
-        System.out.println("Cycles of length 4 (vertex sequence and edge weights):");
-        int idx = 1;
-        for (int[] c : unique.values()) {
-            int a = c[0], b = c[1], cc = c[2], d = c[3];
-            int totalWeight = weight[a][b] + weight[b][cc] + weight[cc][d] + weight[d][a];
-            System.out.printf("  Cycle %d: %d -(%d)-> %d -(%d)-> %d -(%d)-> %d -(%d)-> %d   [total weight = %d]%n",
-                    idx++,
-                    a, weight[a][b],
-                    b, weight[b][cc],
-                    cc, weight[cc][d],
-                    d, weight[d][a],
-                    a,
-                    totalWeight);
-        }
-        System.out.println("Total cycles found: " + unique.size());
-    }
+        double dx = x2 - x1, dy = y2 - y1;
+        double dist = Math.sqrt(dx * dx + dy * dy);
+        double ux = dx / dist, uy = dy / dist;
+        int sx = (int) (x1 + ux * NODE_R);
+        int sy = (int) (y1 + uy * NODE_R);
+        int ex = (int) (x2 - ux * NODE_R);
+        int ey = (int) (y2 - uy * NODE_R);
 
-    private static int[] canonicalize(int[] cycle) {
-        int minIdx = 0;
-        for (int i = 1; i < cycle.length; i++)
-            if (cycle[i] < cycle[minIdx]) minIdx = i;
-        int[] result = new int[cycle.length];
-        for (int i = 0; i < cycle.length; i++)
-            result[i] = cycle[(minIdx + i) % cycle.length];
-        return result;
+        double mx = (sx + ex) / 2.0 - uy * 20;
+        double my = (sy + ey) / 2.0 + ux * 20;
+        g.draw(new QuadCurve2D.Double(sx, sy, mx, my, ex, ey));
+
+        double angle = Math.atan2(ey - my, ex - mx);
+        int ax1 = (int) (ex - 12 * Math.cos(angle - Math.toRadians(30)));
+        int ay1 = (int) (ey - 12 * Math.sin(angle - Math.toRadians(30)));
+        int ax2 = (int) (ex - 12 * Math.cos(angle + Math.toRadians(30)));
+        int ay2 = (int) (ey - 12 * Math.sin(angle + Math.toRadians(30)));
+        g.fillPolygon(new int[]{ex, ax1, ax2}, new int[]{ey, ay1, ay2}, 3);
     }
 }
